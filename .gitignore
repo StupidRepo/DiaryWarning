@@ -7,4 +7,7 @@ riderModule.iml
 .idea
 *.user
 TS/*.dll
+TS/assets
 *.zip
+ABs/*.manifest
+ABs/ABs

@@ -63,7 +63,7 @@ public class DiaryWarningMod : BaseUnityPlugin
             var go = PhotonNetwork.Instantiate(monster.gameObject.name, point.transform.position, Quaternion.identity, 0, null);
             
             Logger.LogWarning($"Spawning {go.name}, rarity = {monster.Rarity}");
-
+            
             var cEvents = new List<ContentEventFrame>();
             MonsterContentProviders[monster.gameObject.name].GetContent(cEvents, 1f, ContentPolling.m_currentPollingCamera, 0f);
             Logger.LogWarning($"Possible views: {BigNumbers.GetScoreToViews(cEvents.First().GetScore(), GameAPI.CurrentDay+1)} for day {GameAPI.CurrentDay}");

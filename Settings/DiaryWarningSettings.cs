@@ -2,5 +2,5 @@
 
 public static class DiaryWarningSettings
 {
-    internal static int TimeOnFor = 4;
+    internal static bool ShowLore = true;
 }

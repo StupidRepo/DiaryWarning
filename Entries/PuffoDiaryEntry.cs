@@ -6,7 +6,6 @@ namespace DiaryWarning.Entries;
 
 public class PuffoDiaryEntry : IDiaryEntry
 {
-    public Type GetContentProviderType() => typeof(PuffoContentEventProvider);
     public string GetTitle() => "Puffo";
 
     public string GetLore() =>

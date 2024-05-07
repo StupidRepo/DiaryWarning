@@ -9,8 +9,6 @@ namespace DiaryWarning.Entries;
 
 public class WhiskDiaryEntry : IDiaryEntry
 {
-    public Type GetContentProviderType() => typeof(ToolkitContentProvider);
-
     public string GetTitle() => "Whisk";
     public string GetLore() =>
         "See, this kind of species is NOT to be messed with. They're like... the worst thing to find when you're exploring down there. So, if you see one, run the f**k away. And fast. " +

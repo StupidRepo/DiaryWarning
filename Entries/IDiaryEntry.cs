@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using DiaryWarning.Settings;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace DiaryWarning.Entries;
 
-public interface IDiaryEntry
+public interface IDiaryEntry<TDiaryProvider> where TDiaryProvider : MonsterContentProvider, new()
 {
-    public Type GetContentProviderType();
     public string GetTitle();
     public string GetLore();
     public IEnumerable<string> GetAbilities();
@@ -16,12 +16,18 @@ public interface IDiaryEntry
     public int GetPossibleViews()
     {
         List<ContentEventFrame> frames = [];
-        var comp = Activator.CreateInstance(GetContentProviderType());
-        ((MonsterContentProvider)comp).GetContent(frames, 1f, ContentPolling.m_currentPollingCamera, 1f);
+        var tempGo = new GameObject();
+        
+        var comp = tempGo.AddComponent<TDiaryProvider>();
+        comp.GetContent(frames, 1f, ContentPolling.m_currentPollingCamera, 1f);
+        Object.DestroyImmediate(tempGo);
+        
+        DiaryWarningMod.Logger.LogWarning(comp.GetType());
+        
         return BigNumbers.GetScoreToViews(frames.First().GetScore(), GameAPI.CurrentDay + 1);
     }
     
-    public string GetDescription() => $"{GetLore()}" +
-                                      $"\n\n<b>Abilities:</b>\n<margin-left=1em>{string.Join("\n", GetAbilities().Select(ability => $"\\u2022<indent=3em>{ability}</indent>"))}</margin-left>" +
+    public string GetDescription() => (DiaryWarningSettings.ShowLore ? $"{GetLore()}\n\n" : "") +
+                                      $"<b>Abilities:</b>\n<margin-left=0.5em>{string.Join("\n", GetAbilities().Select(ability => $"- <indent=1.5em>{ability}</indent>"))}</margin>" +
                                       $"\n\n<b>(You can get <i>{GetPossibleViews()}</i> possible views from recording this monster!)</b>";
 }

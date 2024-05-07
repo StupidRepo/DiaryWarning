@@ -2,13 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using BepInEx;
 using BepInEx.Logging;
 using System.Reflection;
+using DefaultNamespace;
 using DiaryWarning.Entries;
 using DiaryWarning.UIStuff;
 using MonoMod.RuntimeDetour;
 using Photon.Pun;
+using Sirenix.Utilities;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -17,32 +20,21 @@ using Quaternion = UnityEngine.Quaternion;
 
 namespace DiaryWarning;
 
-public static class MonsterContentProviderDetour
-{
-    public static T GetContentEvent<T>(this MonsterContentProvider instance) where T : MonsterContentEvent, new()
-    {
-        T t = new T();
-        t.viewID = instance.photonView?.ViewID ?? 0; // Customize the variables inside T
-        t.worldPosition = new UnityEngine.Vector3(0, 0, 0); // Customize the variables inside T
-        return t;
-    }
-}
-
 [ContentWarningPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_VERSION, false)]
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 public class DiaryWarningMod : BaseUnityPlugin
 {
-    private List<Hook> _hooks = [];
-
     public static DiaryWarningMod Instance { get; private set; } = null!;
+    private List<Hook> _hooks = [];
     internal new static ManualLogSource Logger { get; private set; } = null!;
 
     internal static readonly List<IDiaryEntry> UnlockedDiaryEntries = [];
     internal static readonly List<IDiaryEntry> DiaryEntries = [
-        new PuffoDiaryEntry()
+        new PuffoDiaryEntry(),
+        new WhiskDiaryEntry()
     ];
     
-    internal static List<GameObject> SpawnableMonsters = [];
+    internal static Dictionary<string, ContentProvider> SpawnableMonsters = [];
     // internal static readonly Dictionary<String, ContentProvider> MonsterContentProviders = new();
 
     private const string abName = "assets";
@@ -67,19 +59,20 @@ public class DiaryWarningMod : BaseUnityPlugin
         // };
         // MyceliumNetwork.LobbyDataUpdated += (_) => TakeLobbyDataToConfig();
         
-        On.RoundSpawner.SpawnMonster += (orig, self, monster, point) =>
-        {
-            // orig(self, monster, point);
-            var go = PhotonNetwork.Instantiate(monster.gameObject.name, point.transform.position, Quaternion.identity, 0, null);
-            
-            Logger.LogWarning($"Spawning {go.name}, rarity = {monster.Rarity}");
-            
-            var cEvents = new List<ContentEventFrame>();
-            var cProv = go.GetComponent<ContentProvider>();
-            cProv.GetContent(cEvents, 1f, ContentPolling.m_currentPollingCamera, 0f);
-            
-            Logger.LogWarning($"Possible views: {BigNumbers.GetScoreToViews(cEvents.First().GetScore(), GameAPI.CurrentDay+1)} for day {GameAPI.CurrentDay}");
-        };
+        // On.RoundSpawner.SpawnMonster += (orig, self, monster, point) =>
+        // {
+        //     // orig(self, monster, point);
+        //     var go = PhotonNetwork.Instantiate(monster.gameObject.name, point.transform.position, Quaternion.identity, 0, null);
+        //     
+        //     Logger.LogWarning($"Spawning {go.name}, rarity = {monster.Rarity}"); 
+        //     
+        //     var cEvents = new List<ContentEventFrame>();
+        //     var cProv = go.GetComponent<ContentProvider>() ?? go.GetComponentInChildren<ContentProvider>();
+        //     
+        //     cProv.GetContent(cEvents, 1f, ContentPolling.m_currentPollingCamera, 0f);
+        //     
+        //     Logger.LogWarning($"Possible views: {BigNumbers.GetScoreToViews(cEvents.First().GetScore(), GameAPI.CurrentDay+1)} for day {GameAPI.CurrentDay}");
+        // };
 
         Logger.LogInfo($"{MyPluginInfo.PLUGIN_GUID} v{MyPluginInfo.PLUGIN_VERSION} has loaded!");
     }
@@ -90,15 +83,14 @@ public class DiaryWarningMod : BaseUnityPlugin
     //     DiaryWarningSettings.TimeOnFor = MyceliumNetwork.GetLobbyData<int>("TLOL_TimeOnFor");
     // }
     
-    public delegate object GetContentEventDelegate(MonsterContentProvider self);
-    public delegate object GetContentEventPatchDelegate(GetContentEventDelegate orig, MonsterContentProvider self);
-
+    public delegate MonsterContentEvent GetContentEvent (MonsterContentProvider self);
     
-    public object PatchMethod(GetContentEventDelegate orig, MonsterContentProvider self, Type genericArgument)
+    public static object PatchMethod<TContentEvent>(GetContentEvent orig, MonsterContentProvider self) where TContentEvent : MonsterContentEvent, new()
     {
+        Logger.LogWarning(typeof(TContentEvent));
         if (self.hiddenBot != null) return orig(self);
 
-        var t = (MonsterContentEvent)Activator.CreateInstance(genericArgument);
+        var t = new TContentEvent();
         var viewID = 0;
         if (self.photonView != null)
         {
@@ -107,21 +99,28 @@ public class DiaryWarningMod : BaseUnityPlugin
         t.viewID = viewID;
         t.worldPosition = Vector3.zero;
         return t;
-    } 
+    }
 
     private void Start()
     {
         var targetMethod = typeof(MonsterContentProvider).GetMethod(nameof(MonsterContentProvider.GetContentEvent))!;
+        var patchMethod = typeof(DiaryWarningMod).GetMethod(nameof(PatchMethod))!;
 
         var contentEventGenerics = typeof(MonsterContentProvider).Assembly.Modules
             .SelectMany(module => module.GetTypes())
             .Where(type => type != typeof(MonsterContentEvent) && typeof(MonsterContentEvent).IsAssignableFrom(type));
         
         foreach (var contentEventGeneric in contentEventGenerics) {
-            _hooks.Add(new Hook(targetMethod.MakeGenericMethod(contentEventGeneric), 
-                new GetContentEventPatchDelegate((orig, self) => PatchMethod(orig, self, contentEventGeneric))));
+            _hooks.Add(new Hook(targetMethod.MakeGenericMethod(contentEventGeneric), patchMethod.MakeGenericMethod(contentEventGeneric)));
         }
-
+        
+        foreach (var diary in typeof(IDiaryEntry).Assembly.Modules
+                     .SelectMany(module => module.GetTypes()))
+        {
+            if (!typeof(IDiaryEntry).IsAssignableFrom(diary) || typeof(IDiaryEntry) == diary) continue;
+            DiaryEntries.Add((IDiaryEntry)Activator.CreateInstance(diary));
+        }
+        
         SceneManager.sceneLoaded += (scene, mode) =>
         {
             if(!PhotonNetwork.IsMasterClient) return;

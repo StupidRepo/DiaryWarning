@@ -1,10 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DiaryWarning.Entries;
 
 public class PuffoDiaryEntry : IDiaryEntry
 {
+    public Type GetContentProviderType() => typeof(PuffoContentEventProvider);
     public string GetTitle() => "Puffo";
 
     public string GetLore() =>
@@ -17,12 +19,4 @@ public class PuffoDiaryEntry : IDiaryEntry
         "Inflates when you get close to it.",
         "Upon inflating, a Puffo releases a shockwave that pushes you back and deals up to <color=red>25</color> damage."
     ];
-    
-    public int GetPossibleViews()
-    {
-        List<ContentEventFrame> frames = [];
-        DiaryWarningMod.MonsterContentProviders["Puffo"]
-            .GetContent(frames, 1f, ContentPolling.m_currentPollingCamera, 1f);
-        return BigNumbers.GetScoreToViews(frames.First().GetScore(), GameAPI.CurrentDay + 1);
-    }
 }

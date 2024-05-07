@@ -1,10 +1,16 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
+using Zorro.Core;
+using Object = UnityEngine.Object;
 
 namespace DiaryWarning.Entries;
 
 public class WhiskDiaryEntry : IDiaryEntry
 {
+    public Type GetContentProviderType() => typeof(ToolkitContentProvider);
+
     public string GetTitle() => "Whisk";
     public string GetLore() =>
         "See, this kind of species is NOT to be messed with. They're like... the worst thing to find when you're exploring down there. So, if you see one, run the f**k away. And fast. " +
@@ -22,12 +28,4 @@ public class WhiskDiaryEntry : IDiaryEntry
         "It doesn't stop running until it hits a wall, where it will fall over for a few seconds, get up, and then try to find another player to mix.",
         "There have been cases where Whisks just run off and hide, instead of attacking players."
     ];
-    
-    public int GetPossibleViews()
-    {
-        List<ContentEventFrame> frames = [];
-        DiaryWarningMod.MonsterContentProviders["Toolkit_Wisk"]
-            .GetContent(frames, 1f, ContentPolling.m_currentPollingCamera, 1f);
-        return BigNumbers.GetScoreToViews(frames.First().GetScore(), GameAPI.CurrentDay + 1);
-    }
 }

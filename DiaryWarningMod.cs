@@ -2,15 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Numerics;
 using BepInEx;
 using BepInEx.Logging;
 using System.Reflection;
-using DefaultNamespace;
 using DiaryWarning.Entries;
-using MyceliumNetworking;
-using DiaryWarning.Settings;
 using DiaryWarning.UIStuff;
+using MonoMod.RuntimeDetour;
 using Photon.Pun;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -20,29 +17,42 @@ using Quaternion = UnityEngine.Quaternion;
 
 namespace DiaryWarning;
 
+public static class MonsterContentProviderDetour
+{
+    public static T GetContentEvent<T>(this MonsterContentProvider instance) where T : MonsterContentEvent, new()
+    {
+        T t = new T();
+        t.viewID = instance.photonView?.ViewID ?? 0; // Customize the variables inside T
+        t.worldPosition = new UnityEngine.Vector3(0, 0, 0); // Customize the variables inside T
+        return t;
+    }
+}
+
 [ContentWarningPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_VERSION, false)]
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 public class DiaryWarningMod : BaseUnityPlugin
 {
+    private List<Hook> _hooks = [];
+
     public static DiaryWarningMod Instance { get; private set; } = null!;
     internal new static ManualLogSource Logger { get; private set; } = null!;
 
     internal static readonly List<IDiaryEntry> UnlockedDiaryEntries = [];
-    internal static readonly Dictionary<Type, IDiaryEntry> DiaryEntries = new() {
-        { typeof(PuffoContentEventProvider), new PuffoDiaryEntry() }
-    };
+    internal static readonly List<IDiaryEntry> DiaryEntries = [
+        new PuffoDiaryEntry()
+    ];
     
     internal static List<GameObject> SpawnableMonsters = [];
-    internal static readonly Dictionary<String, ContentProvider> MonsterContentProviders = new();
+    // internal static readonly Dictionary<String, ContentProvider> MonsterContentProviders = new();
 
     private const string abName = "assets";
     internal static readonly AssetBundle mainAB = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, abName));
-
+    
     private void Awake()
     {
         Logger = base.Logger;
         Instance = this;
-
+        
         // PatchAll();
         
         // MyceliumNetwork.RegisterLobbyDataKey("TLOL_TimeOnFor");
@@ -65,7 +75,9 @@ public class DiaryWarningMod : BaseUnityPlugin
             Logger.LogWarning($"Spawning {go.name}, rarity = {monster.Rarity}");
             
             var cEvents = new List<ContentEventFrame>();
-            MonsterContentProviders[monster.gameObject.name].GetContent(cEvents, 1f, ContentPolling.m_currentPollingCamera, 0f);
+            var cProv = go.GetComponent<ContentProvider>();
+            cProv.GetContent(cEvents, 1f, ContentPolling.m_currentPollingCamera, 0f);
+            
             Logger.LogWarning($"Possible views: {BigNumbers.GetScoreToViews(cEvents.First().GetScore(), GameAPI.CurrentDay+1)} for day {GameAPI.CurrentDay}");
         };
 
@@ -77,17 +89,37 @@ public class DiaryWarningMod : BaseUnityPlugin
     //     if (MyceliumNetwork.IsHost) return;
     //     DiaryWarningSettings.TimeOnFor = MyceliumNetwork.GetLobbyData<int>("TLOL_TimeOnFor");
     // }
+    
+    public delegate object GetContentEventDelegate(MonsterContentProvider self);
+    public delegate object GetContentEventPatchDelegate(GetContentEventDelegate orig, MonsterContentProvider self);
+
+    
+    public object PatchMethod(GetContentEventDelegate orig, MonsterContentProvider self, Type genericArgument)
+    {
+        if (self.hiddenBot != null) return orig(self);
+
+        var t = (MonsterContentEvent)Activator.CreateInstance(genericArgument);
+        var viewID = 0;
+        if (self.photonView != null)
+        {
+            viewID = self.photonView.ViewID;
+        }
+        t.viewID = viewID;
+        t.worldPosition = Vector3.zero;
+        return t;
+    } 
 
     private void Start()
     {
-        SpawnableMonsters = Resources.LoadAll<GameObject>("").Where(GameObject => GameObject.GetComponent<BudgetCost>() != null).ToList();
-        foreach (var spawnable in SpawnableMonsters)
-        {
-            var contentProvider = spawnable.GetComponent<ContentProvider>();
-            if (contentProvider == null) continue;
-            Logger.LogWarning($"{spawnable.name} has a content provider of type {contentProvider.GetType().Name}");
-            
-            MonsterContentProviders.Add(spawnable.name, contentProvider);
+        var targetMethod = typeof(MonsterContentProvider).GetMethod(nameof(MonsterContentProvider.GetContentEvent))!;
+
+        var contentEventGenerics = typeof(MonsterContentProvider).Assembly.Modules
+            .SelectMany(module => module.GetTypes())
+            .Where(type => type != typeof(MonsterContentEvent) && typeof(MonsterContentEvent).IsAssignableFrom(type));
+        
+        foreach (var contentEventGeneric in contentEventGenerics) {
+            _hooks.Add(new Hook(targetMethod.MakeGenericMethod(contentEventGeneric), 
+                new GetContentEventPatchDelegate((orig, self) => PatchMethod(orig, self, contentEventGeneric))));
         }
 
         SceneManager.sceneLoaded += (scene, mode) =>
@@ -120,9 +152,10 @@ public class DiaryWarningMod : BaseUnityPlugin
             if(key is null) continue;
             
             var obj = key.gameObject;
-            
-            if(!DiaryEntries.ContainsKey(key.GetType())) continue;
-            var diaryEntry = DiaryEntries[key.GetType()];
+
+            var diaryEntry = DiaryEntries.Find(de =>
+                de.GetContentProviderType() == key.GetType());
+            if (diaryEntry is null) continue;
             
             if (UnlockedDiaryEntries.Contains(diaryEntry)) continue;
             UnlockedDiaryEntries.Add(diaryEntry);

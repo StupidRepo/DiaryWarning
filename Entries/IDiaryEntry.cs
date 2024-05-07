@@ -2,29 +2,23 @@
 using System.Collections.Generic;
 using System.Linq;
 using DiaryWarning.Settings;
+using Photon.Pun;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace DiaryWarning.Entries;
 
-public interface IDiaryEntry<TDiaryProvider> where TDiaryProvider : MonsterContentProvider, new()
+public interface IDiaryEntry
 {
+    public ContentEvent GetContentEvent();
+    
     public string GetTitle();
     public string GetLore();
     public IEnumerable<string> GetAbilities();
 
     public int GetPossibleViews()
     {
-        List<ContentEventFrame> frames = [];
-        var tempGo = new GameObject();
-        
-        var comp = tempGo.AddComponent<TDiaryProvider>();
-        comp.GetContent(frames, 1f, ContentPolling.m_currentPollingCamera, 1f);
-        Object.DestroyImmediate(tempGo);
-        
-        DiaryWarningMod.Logger.LogWarning(comp.GetType());
-        
-        return BigNumbers.GetScoreToViews(frames.First().GetScore(), GameAPI.CurrentDay + 1);
+        return BigNumbers.GetScoreToViews(GetContentEvent().GetContentValue(), GameAPI.CurrentDay + 1);
     }
     
     public string GetDescription() => (DiaryWarningSettings.ShowLore ? $"{GetLore()}\n\n" : "") +

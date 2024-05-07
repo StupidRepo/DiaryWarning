@@ -6,6 +6,8 @@ namespace DiaryWarning.Entries;
 
 public class PuffoDiaryEntry : IDiaryEntry
 {
+    public ContentEvent GetContentEvent() => new PuffoContentEvent();
+
     public string GetTitle() => "Puffo";
 
     public string GetLore() =>

@@ -29,12 +29,12 @@ public class DiaryWarningMod : BaseUnityPlugin
     internal new static ManualLogSource Logger { get; private set; } = null!;
 
     internal static readonly List<IDiaryEntry> UnlockedDiaryEntries = [];
-    internal static readonly List<IDiaryEntry> DiaryEntries = [
-        new PuffoDiaryEntry(),
-        new WhiskDiaryEntry()
-    ];
+    internal static readonly List<IDiaryEntry> DiaryEntries = [];// = [
+        // new PuffoDiaryEntry(),
+        // new WhiskDiaryEntry()
+    // ];
     
-    internal static Dictionary<string, ContentProvider> SpawnableMonsters = [];
+    internal static List<BudgetCost> MonstersLol = [];
     // internal static readonly Dictionary<String, ContentProvider> MonsterContentProviders = new();
 
     private const string abName = "assets";
@@ -82,43 +82,16 @@ public class DiaryWarningMod : BaseUnityPlugin
     //     if (MyceliumNetwork.IsHost) return;
     //     DiaryWarningSettings.TimeOnFor = MyceliumNetwork.GetLobbyData<int>("TLOL_TimeOnFor");
     // }
-    
-    public delegate MonsterContentEvent GetContentEvent (MonsterContentProvider self);
-    
-    public static object PatchMethod<TContentEvent>(GetContentEvent orig, MonsterContentProvider self) where TContentEvent : MonsterContentEvent, new()
-    {
-        Logger.LogWarning(typeof(TContentEvent));
-        if (self.hiddenBot != null) return orig(self);
-
-        var t = new TContentEvent();
-        var viewID = 0;
-        if (self.photonView != null)
-        {
-            viewID = self.photonView.ViewID;
-        }
-        t.viewID = viewID;
-        t.worldPosition = Vector3.zero;
-        return t;
-    }
 
     private void Start()
     {
-        var targetMethod = typeof(MonsterContentProvider).GetMethod(nameof(MonsterContentProvider.GetContentEvent))!;
-        var patchMethod = typeof(DiaryWarningMod).GetMethod(nameof(PatchMethod))!;
-
-        var contentEventGenerics = typeof(MonsterContentProvider).Assembly.Modules
-            .SelectMany(module => module.GetTypes())
-            .Where(type => type != typeof(MonsterContentEvent) && typeof(MonsterContentEvent).IsAssignableFrom(type));
-        
-        foreach (var contentEventGeneric in contentEventGenerics) {
-            _hooks.Add(new Hook(targetMethod.MakeGenericMethod(contentEventGeneric), patchMethod.MakeGenericMethod(contentEventGeneric)));
-        }
-        
         foreach (var diary in typeof(IDiaryEntry).Assembly.Modules
-                     .SelectMany(module => module.GetTypes()))
+                     .SelectMany(ty => ty.GetTypes())
+                     .Where(ty => typeof(IDiaryEntry).IsAssignableFrom(ty) && !ty.IsInterface && !ty.IsAbstract))
         {
-            if (!typeof(IDiaryEntry).IsAssignableFrom(diary) || typeof(IDiaryEntry) == diary) continue;
-            DiaryEntries.Add((IDiaryEntry)Activator.CreateInstance(diary));
+            var diaryEntry = (IDiaryEntry)Activator.CreateInstance(diary)!;
+            DiaryEntries.Add(diaryEntry);
+            Logger.LogWarning($"Added diary entry for {diaryEntry.GetTitle()}");
         }
         
         SceneManager.sceneLoaded += (scene, mode) =>
@@ -151,9 +124,11 @@ public class DiaryWarningMod : BaseUnityPlugin
             if(key is null) continue;
             
             var obj = key.gameObject;
-
+            List<ContentEventFrame> cEvents = [];
+            key.GetContent(cEvents, 1f, ContentPolling.m_currentPollingCamera, 1f);
+            
             var diaryEntry = DiaryEntries.Find(de =>
-                de.GetContentProviderType() == key.GetType());
+                de.GetContentEvent().GetType() == cEvents.First().contentEvent.GetType());
             if (diaryEntry is null) continue;
             
             if (UnlockedDiaryEntries.Contains(diaryEntry)) continue;

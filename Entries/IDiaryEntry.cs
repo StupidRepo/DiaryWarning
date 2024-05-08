@@ -1,17 +1,25 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using DiaryWarning.Settings;
+using Photon.Pun;
+using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace DiaryWarning.Entries;
 
 public interface IDiaryEntry
 {
+    public ContentEvent GetContentEvent();
+    
     public string GetTitle();
     public string GetLore();
     public IEnumerable<string> GetAbilities();
 
-    public int GetPossibleViews();
+    public int GetPossibleViews() => BigNumbers.GetScoreToViews(GetContentEvent().GetContentValue(), GameAPI.CurrentDay);
+    public int GetPossibleDamage();
     
-    public string GetDescription() => $"{GetLore()}" +
-                                      $"\n\n<b>Abilities:</b>\n<margin-left=1em>{string.Join("\n", GetAbilities().Select(ability => $"\\u2022<indent=3em>{ability}</indent>"))}</margin-left>" +
-                                      $"\n\n<b>(You can get <i>{GetPossibleViews()}</i> possible views from recording this monster!)</b>";
+    public string GetDescription() => ((DiaryWarningSettings.ShowLore ? $"{GetLore()}\n\n" : "") +
+                                      $"<b>Abilities:</b>\n<margin-left=0.5em>{string.Join("\n", GetAbilities().Select(ability => $"- <indent=1.5em>{ability}</indent>"))}</margin>" +
+                                      $"\n\n<b>(You can get <i>{GetPossibleViews()}</i> possible views from recording this monster!)</b>").Replace("<damage>", $"<color=red>{GetPossibleDamage()}</color>");
 }

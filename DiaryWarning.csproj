@@ -57,15 +57,14 @@
     </ItemGroup>
 
     <!-- References - Game Assemblies -->
-    <ItemGroup Condition="$(CI) != 'true'">
-<!--        <Reference Include="$(ManagedDirectory)Assembly-CSharp.dll" Private="false"/>-->
-<!--        <Reference Include="$(ManagedDirectory)Zorro.*.dll" Private="false"/>-->
-<!--        <Reference Include="$(ManagedDirectory)Zorro.Core.Runtime.dll" Private="false"/>-->
-<!--        <Reference Include="$(ManagedDirectory)Photon*.dll" Private="false"/>-->
-
-        <PackageReference Include="ContentWarning.GameLibs.Steam" Version="0.1.11-a-ngd.0" PrivateAssets="all" Publicize="true" />
+    <ItemGroup>
+        <Reference Include="$(ManagedDirectory)Assembly-CSharp.dll" Publicize="true"/>
+        <Reference Include="$(ManagedDirectory)Photon*.dll"/>
+        <Reference Include="$(ManagedDirectory)Zorro*.dll"/>
+        <Reference Include="$(ManagedDirectory)Unity*.dll"/>
+        <Reference Include="$(ManagedDirectory)Siren*.dll"/>
     </ItemGroup>
-
+    
     <!-- References - HookGen Assemblies -->
     <ItemGroup>
         <Reference Include="$(MMHOOKManaged)MMHOOK_Assembly-CSharp.dll"/>

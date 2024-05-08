@@ -21,11 +21,13 @@ public class WhiskDiaryEntry : IDiaryEntry
         "This was the only registered case of one of these things NOT attacking a human. They still don't know what changed its mind, if these monsters even have minds, but one thing's for sure: " +
         "I'm never going near one of those things again.";
     
+    public int GetPossibleDamage() => 95;
+    
     public IEnumerable<string> GetAbilities() =>
     [
         "If it spots a player, it will turn towards them. After a few seconds, it will start running in their direction.",
-        "If it hits a player, it will deal <color=red>95</color> damage.",
-        "It doesn't stop running until it hits a wall, where it will fall over for a few seconds, get up, and then try to find another player to mix.",
+        "If it hits a player, it will deal <damage> damage.",
+        "It doesn't stop running until it hits a wall, where it will fall over for a few seconds, get up, and then try to find another player to churn into mush.",
         "There have been cases where Whisks just run off and hide, instead of attacking players."
     ];
 }
